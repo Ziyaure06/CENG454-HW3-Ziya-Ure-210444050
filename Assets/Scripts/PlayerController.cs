@@ -52,13 +52,18 @@ public class PlayerController : MonoBehaviour, IDamageable
     private void RotateTowardsMouse()
     {
         Ray ray = _mainCamera.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hitInfo, Mathf.Infinity))
+
+        // Sadece "Ground" (Zemin) layer'ýna sahip objeleri vurmasý için maske oluþturuyoruz
+        // Karakterin kendisine veya düþmanlara çarparak sapýtmasýný önler.
+        int groundLayerMask = LayerMask.GetMask("Ground");
+
+        if (Physics.Raycast(ray, out RaycastHit hitInfo, Mathf.Infinity, groundLayerMask))
         {
             Vector3 targetPosition = hitInfo.point;
             targetPosition.y = transform.position.y; // Y ekseninde eðilmeyi önle
 
             Vector3 direction = targetPosition - transform.position;
-            if (direction != Vector3.zero)
+            if (direction.magnitude > 0.1f) // Küçük sapmalarý engellemek için min mesafe kontrolü
             {
                 transform.rotation = Quaternion.LookRotation(direction);
             }
