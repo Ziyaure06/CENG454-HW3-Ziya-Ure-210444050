@@ -2,8 +2,8 @@ using UnityEngine;
 
 public interface IWeapon
 {
-    // Silahýn ateþleme eylemini gerçekleþtirir.
-    // firePoint: Merminin çýkýþ pozisyonu ve rotasyonu (Silahýn ucu).
-    // direction: Merminin hedefe doðru gideceði yön vektörü.
+    // Hata buradaydý: Bu satýrýn mutlaka olmasý gerekiyor!
+    float FireRate { get; }
+
     void Fire(Transform firePoint, Vector3 direction);
 }
