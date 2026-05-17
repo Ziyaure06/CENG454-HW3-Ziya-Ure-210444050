@@ -1,13 +1,12 @@
 using System;
 using UnityEngine;
 
-public class CoreBase : MonoBehaviour, IDamageable
+public class CoreBase : MonoBehaviour, IDamageable, IInteractable
 {
     [Header("Core Settings")]
-    [Tooltip("Core'un oyuna baþlarken sahip olacaðý maksimum can.")]
     [SerializeField] private float initialHealth = 100f;
+    [SerializeField] private float repairSpeed = 20f; // Oyuncu E'ye bastýkça saniyede yenilenen can
 
-    // IDamageable arayüzünden gelen zorunlu alanlar
     public float CurrentHealth { get; private set; }
     public float MaxHealth { get; private set; }
 
@@ -18,29 +17,33 @@ public class CoreBase : MonoBehaviour, IDamageable
     {
         MaxHealth = initialHealth;
         CurrentHealth = MaxHealth;
+        OnHealthPercentChanged?.Invoke(CurrentHealth / MaxHealth);
+    }
 
-      
+   
+    public void Interact(float deltaTime)
+    {
+        if (CurrentHealth <= 0 || CurrentHealth >= MaxHealth) return;
+
+        CurrentHealth += repairSpeed * deltaTime;
+        CurrentHealth = Mathf.Min(CurrentHealth, MaxHealth);
+
+        
         OnHealthPercentChanged?.Invoke(CurrentHealth / MaxHealth);
     }
 
     public void TakeDamage(float amount)
     {
-        
         if (CurrentHealth <= 0) return;
 
         CurrentHealth -= amount;
-
-       
         CurrentHealth = Mathf.Max(0, CurrentHealth);
 
-      
         OnHealthPercentChanged?.Invoke(CurrentHealth / MaxHealth);
 
-       
         if (CurrentHealth <= 0)
         {
             OnDied?.Invoke();
-            Debug.Log("CORE DESTROYED! (Phase 5'te Game Over sistemine baðlanacak)");
         }
     }
 }

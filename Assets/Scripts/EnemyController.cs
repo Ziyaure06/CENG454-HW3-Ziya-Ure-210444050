@@ -2,7 +2,6 @@ using System;
 using UnityEngine;
 using UnityEngine.AI;
 
-
 [RequireComponent(typeof(NavMeshAgent))]
 public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 {
@@ -12,11 +11,13 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
     public event Action<float> OnHealthPercentChanged;
     public event Action OnDied;
 
-    
     public Action<EnemyController> ReturnToPoolAction;
 
     private NavMeshAgent _agent;
     private IMovementStrategy _currentStrategy;
+
+    // BUG FIX: Çift ölüm korumasý için bayrak
+    private bool _isDead = false;
 
     private void Awake()
     {
@@ -26,8 +27,8 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
     public void OnSpawn()
     {
         CurrentHealth = MaxHealth;
+        _isDead = false; // Havuzdan yeni çýkarken diriltiyoruz!
 
-       
         if (UnityEngine.Random.value <= 0.7f)
         {
             _currentStrategy = new TargetBaseStrategy();
@@ -42,8 +43,7 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 
     private void Update()
     {
-       
-        if (_currentStrategy != null && _agent.isActiveAndEnabled)
+        if (!_isDead && _currentStrategy != null && _agent.isActiveAndEnabled)
         {
             _currentStrategy.ExecuteMove(_agent, transform);
         }
@@ -51,40 +51,42 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 
     public void TakeDamage(float amount)
     {
+        // BUG FIX: Eðer zaten öldüysek, gelen ekstra hasarlarý ve havuz taleplerini yoksay!
+        if (_isDead) return;
+
         CurrentHealth -= amount;
         OnHealthPercentChanged?.Invoke(CurrentHealth / MaxHealth);
 
         if (CurrentHealth <= 0)
         {
+            _isDead = true; // Objeyi ölü olarak iþaretle ki bir daha tetiklenmesin
             OnDied?.Invoke();
-            ReturnToPoolAction?.Invoke(this); 
+            ReturnToPoolAction?.Invoke(this);
         }
     }
 
     public void OnDespawn()
     {
-       
         OnHealthPercentChanged = null;
         OnDied = null;
-        _currentStrategy = null; 
+        _currentStrategy = null;
 
-        if (_agent.isOnNavMesh)
+        if (_agent.isActiveAndEnabled && _agent.isOnNavMesh)
         {
-            _agent.ResetPath(); 
+            _agent.ResetPath();
         }
     }
 
     private void OnTriggerEnter(Collider other)
     {
-       
-        IDamageable hitObject = other.GetComponent<IDamageable>();
+        // Eðer zaten öldüysek çarpýþmayý yoksay
+        if (_isDead) return;
 
+        IDamageable hitObject = other.GetComponent<IDamageable>();
         if (hitObject != null)
         {
-            hitObject.TakeDamage(10f); 
-            TakeDamage(CurrentHealth); 
+            hitObject.TakeDamage(10f);
+            TakeDamage(CurrentHealth);
         }
     }
 }
-    
-
