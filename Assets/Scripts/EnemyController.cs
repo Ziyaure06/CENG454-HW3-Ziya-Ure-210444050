@@ -5,8 +5,12 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 {
+    // --- STATÝK EVENT (DropManager için) ---
+    public static event Action<Vector3> OnEnemyDiedAtPosition;
+
+    [Header("Health Settings")]
+    public float MaxHealth { get; private set; } = 1f;
     public float CurrentHealth { get; private set; }
-    public float MaxHealth { get; } = 1f;
 
     public event Action<float> OnHealthPercentChanged;
     public event Action OnDied;
@@ -15,8 +19,6 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 
     private NavMeshAgent _agent;
     private IMovementStrategy _currentStrategy;
-
-    // BUG FIX: Çift ölüm korumasý için bayrak
     private bool _isDead = false;
 
     private void Awake()
@@ -26,19 +28,14 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 
     public void OnSpawn()
     {
+        _isDead = false;
         CurrentHealth = MaxHealth;
-        _isDead = false; // Havuzdan yeni çýkarken diriltiyoruz!
 
+        // %70 Base, %30 Player stratejisi
         if (UnityEngine.Random.value <= 0.7f)
-        {
             _currentStrategy = new TargetBaseStrategy();
-            gameObject.name = "Enemy (Targeting Core)";
-        }
         else
-        {
             _currentStrategy = new HuntPlayerStrategy();
-            gameObject.name = "Enemy (Hunting Player)";
-        }
     }
 
     private void Update()
@@ -51,7 +48,6 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 
     public void TakeDamage(float amount)
     {
-        // BUG FIX: Eðer zaten öldüysek, gelen ekstra hasarlarý ve havuz taleplerini yoksay!
         if (_isDead) return;
 
         CurrentHealth -= amount;
@@ -59,34 +55,42 @@ public class EnemyController : MonoBehaviour, IDamageable, IPoolable
 
         if (CurrentHealth <= 0)
         {
-            _isDead = true; // Objeyi ölü olarak iþaretle ki bir daha tetiklenmesin
-            OnDied?.Invoke();
-            ReturnToPoolAction?.Invoke(this);
+            Die();
         }
+    }
+
+    private void Die()
+    {
+        _isDead = true;
+
+        // 1. OBSERVER: DropManager'a pozisyon bildir
+        OnEnemyDiedAtPosition?.Invoke(transform.position);
+
+        // 2. EVENT: Diðer sistemlere haber ver
+        OnDied?.Invoke();
+
+        // 3. POOL: Havuza geri dön
+        ReturnToPoolAction?.Invoke(this);
     }
 
     public void OnDespawn()
     {
+        // Temizlik kurallarý
         OnHealthPercentChanged = null;
         OnDied = null;
         _currentStrategy = null;
-
-        if (_agent.isActiveAndEnabled && _agent.isOnNavMesh)
-        {
-            _agent.ResetPath();
-        }
+        if (_agent.isActiveAndEnabled && _agent.isOnNavMesh) _agent.ResetPath();
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        // Eðer zaten öldüysek çarpýþmayý yoksay
         if (_isDead) return;
 
         IDamageable hitObject = other.GetComponent<IDamageable>();
-        if (hitObject != null)
+        if (hitObject != null && other.gameObject.tag != "Enemy") // Kendi arkadaþlarýna vurma
         {
             hitObject.TakeDamage(10f);
-            TakeDamage(CurrentHealth);
+            TakeDamage(MaxHealth); // Kamikaze
         }
     }
 }

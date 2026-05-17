@@ -5,8 +5,8 @@ public class WallFoundation : MonoBehaviour, IInteractable, IDamageable
 {
     [Header("Wall Settings")]
     [SerializeField] private float maxHealth = 100f;
-    [SerializeField] private float repairSpeed = 25f; // Saniyede kaç can tamir olacak?
-    [SerializeField] private float maxHeightScale = 3f; // Duvar tamamlanýnca Y boyutu ne olacak?
+    [SerializeField] private float repairSpeed = 25f;
+    [SerializeField] private float maxHeightScale = 3f;
 
     public float CurrentHealth { get; private set; }
     public float MaxHealth => maxHealth;
@@ -14,7 +14,6 @@ public class WallFoundation : MonoBehaviour, IInteractable, IDamageable
     public event Action<float> OnHealthPercentChanged;
     public event Action OnDied;
 
-    // OBSERVER PATTERN: Oyun durumunu takip eden sýnýf (GameStateTracker) bunu dinleyecek
     public static event Action OnWallCompleted;
 
     private bool _isCompleted = false;
@@ -23,14 +22,12 @@ public class WallFoundation : MonoBehaviour, IInteractable, IDamageable
     private void Start()
     {
         _initialScale = transform.localScale;
-        CurrentHealth = 0f; // Duvar yýkýk (0 can) baþlar
+        CurrentHealth = 0f; // Oyun baþýnda yýkýk (0 can) baþlar
 
-        // Ýlk baþta tamamen basýk/yerde görünsün
-        UpdateWallScale();
-        OnHealthPercentChanged?.Invoke(0f);
+        // Baþlangýçta en altta ve kýpkýrmýzý olmasý için tetikliyoruz
+        UpdateWallScaleAndColor();
     }
 
-    // IInteractable Sözleþmesi: Oyuncu 'E'ye bastýkça çaðrýlýr
     public void Interact(float deltaTime)
     {
         if (_isCompleted) return;
@@ -38,39 +35,47 @@ public class WallFoundation : MonoBehaviour, IInteractable, IDamageable
         CurrentHealth += repairSpeed * deltaTime;
         CurrentHealth = Mathf.Min(CurrentHealth, maxHealth);
 
-        UpdateWallScale();
-        OnHealthPercentChanged?.Invoke(CurrentHealth / maxHealth);
+        UpdateWallScaleAndColor();
 
         if (CurrentHealth >= maxHealth && !_isCompleted)
         {
             _isCompleted = true;
-            OnWallCompleted?.Invoke(); // Duvar bitti olayý fýrlatýlýr
+            OnWallCompleted?.Invoke();
             Debug.Log("Bir duvar baþarýyla inþa edildi!");
         }
     }
 
-    private void UpdateWallScale()
-    {
-        // Can yüzdesine göre Y eksenindeki scale deðerini artýrýyoruz
-        float percent = maxHealth > 0 ? CurrentHealth / maxHealth : 0;
-        float currentHeight = Mathf.Lerp(0.1f, maxHeightScale, percent);
-        transform.localScale = new Vector3(_initialScale.x, currentHeight, _initialScale.z);
-    }
-
     public void TakeDamage(float amount)
     {
+        // Canýmýz zaten 0 ise daha fazla hasar alýp batamaz
         if (CurrentHealth <= 0) return;
 
         CurrentHealth -= amount;
         CurrentHealth = Mathf.Max(0, CurrentHealth);
 
-        UpdateWallScale();
-        OnHealthPercentChanged?.Invoke(CurrentHealth / maxHealth);
+        UpdateWallScaleAndColor();
 
-        if (CurrentHealth <= 0 && _isCompleted)
+        if (CurrentHealth <= 0)
         {
-            _isCompleted = false;
-            OnDied?.Invoke();
+            if (_isCompleted)
+            {
+                _isCompleted = false;
+                OnDied?.Invoke(); // Duvarýn yýkýldýðýný sisteme haber ver
+                Debug.Log("Bir duvar tamamen yýkýldý ve zemine battý!");
+            }
         }
+    }
+
+    private void UpdateWallScaleAndColor()
+    {
+        float percent = maxHealth > 0 ? CurrentHealth / maxHealth : 0;
+
+        // 1. Ölçeklendirme: Can azaldýkça Y ekseninde zemine doðru pürüzsüzce girer (0.1f yok olmasýný önler)
+        float currentHeight = Mathf.Lerp(0.1f, maxHeightScale, percent);
+        transform.localScale = new Vector3(_initialScale.x, currentHeight, _initialScale.z);
+
+        // 2. Renk Feedback: Can yüzdesini Observer'a (ColorFeedback) gönderir
+        // %0 iken Kýrmýzý, %100 iken Yeþil olmasýný saðlar.
+        OnHealthPercentChanged?.Invoke(percent);
     }
 }
